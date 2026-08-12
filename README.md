@@ -1,7 +1,7 @@
-# openhost-lyftr
+# bottled-lyftr
 
 [Lyftr](https://github.com/Cawlumm/lyftr) (self-hosted workout, weightlifting,
-bodyweight and nutrition tracker) packaged for OpenHost with one-click owner SSO.
+bodyweight and nutrition tracker) packaged for Cloud in a Bottle with one-click owner SSO.
 
 Log workouts and sets, build programs, run guided gym sessions, and track your
 bodyweight and PRs over time — all backed by a single SQLite file on your zone.
@@ -14,12 +14,12 @@ container and fronts them with a small Python auth-proxy (`auth_proxy.py`):
 
 - proxies `/api/*` to the Go backend (`127.0.0.1:3000`, SQLite),
 - serves the built SPA assets,
-- auto-logs-in the OpenHost owner.
+- auto-logs-in the Cloud in a Bottle owner.
 
 ## SSO model
 
 Lyftr has no session cookies and no header/REMOTE_USER auth — it is a
-localStorage-JWT SPA. So we bridge OpenHost's `X-OpenHost-Is-Owner` signal into
+localStorage-JWT SPA. So we bridge Cloud in a Bottle's `X-OpenHost-Is-Owner` signal into
 Lyftr's own JWT scheme:
 
 1. On the owner's first HTML navigation, the auth-proxy injects a tiny
