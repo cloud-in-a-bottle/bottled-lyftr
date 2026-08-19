@@ -1,0 +1,163 @@
+NOTICE
+======
+
+bottled-lyftr
+-------------
+
+This repository packages Lyftr, a self-hosted workout, weightlifting,
+bodyweight and nutrition tracker, as a Cloud in a Bottle app. It contains the
+packaging material only (a Dockerfile, an app manifest, a start script, and a
+small Python proxy that serves the app's web assets and forwards API requests
+to the backend); no upstream source code is vendored here.
+
+The whole of this repository is licensed under the MIT License. The full text
+is reproduced at the end of this file and in LICENSE.
+
+Copyright (c) 2026 Andrew Laack (packaging)
+
+
+Upstream project
+----------------
+
+Lyftr
+  Homepage:  https://github.com/Cawlumm/lyftr
+  License:   MIT
+  Copyright: Copyright (c) 2026 cwlumm
+
+Lyftr's own license text is identical to the MIT text reproduced below, and
+its copyright line is retained in LICENSE alongside the packaging copyright.
+
+
+Source offer
+------------
+
+The container image is built entirely from upstream source. The build clones
+https://github.com/Cawlumm/lyftr and checks out the ref given by the
+LYFTR_REF build argument, then compiles the Go backend from backend/ and the
+web assets from web/ at that ref. Nothing is pulled from a prebuilt upstream
+image.
+
+The Dockerfile pins LYFTR_REF to a release tag rather than a moving branch, so
+the artifact is identifiable:
+
+  Tag:    v0.1.0-beta.6
+  Commit: 5dae7c50b2dda877f394a247272ccfc3b9d9d32d
+  URL:    https://github.com/Cawlumm/lyftr/tree/v0.1.0-beta.6
+
+Because the image builds the backend and the web assets from source at that
+ref, the Corresponding Source for the Lyftr code in the image is that upstream
+tag (equivalently, that commit). Anyone who receives the image can obtain the
+exact sources from the URL above, or by running this repository's build with
+LYFTR_REF set to that tag.
+
+
+Third-party components (build and runtime images)
+-------------------------------------------------
+
+The image is assembled from the following base images. Each carries the
+license terms of its own upstream project and of the distribution packages it
+contains; this list names the primary projects involved and is not a complete
+package manifest.
+
+  alpine/git (source-fetch stage)
+    Image:   https://hub.docker.com/r/alpine/git
+    Git:     https://git-scm.com, GPL-2.0
+    Alpine:  https://alpinelinux.org
+
+  golang:1.26-alpine (backend build stage)
+    Image:   https://hub.docker.com/_/golang
+    Go:      https://go.dev, BSD-3-Clause
+    Alpine:  https://alpinelinux.org
+
+  node:20-alpine (web asset build stage)
+    Image:   https://hub.docker.com/_/node
+    Node.js: https://nodejs.org, MIT
+    npm:     https://npmjs.com, Artistic-2.0
+    Alpine:  https://alpinelinux.org
+
+  alpine:3.19 (runtime stage)
+    Image:   https://hub.docker.com/_/alpine
+    Alpine Linux: https://alpinelinux.org
+    musl libc:    https://musl.libc.org, MIT
+    BusyBox:      https://busybox.net, GPL-2.0
+
+The runtime stage additionally installs these Alpine packages:
+
+  python3          https://python.org, Python Software Foundation License
+  ca-certificates  Mozilla CA certificate bundle, MPL-2.0
+  wget             https://gnu.org/software/wget, GPL-3.0-or-later
+
+Go and JavaScript dependency trees are not enumerated here. They are resolved
+during the build from upstream's own manifests and lock files at the pinned
+ref named above:
+
+  backend/go.mod, backend/go.sum   the Go modules linked into the backend
+                                   binary
+  web/package.json                 the web app's declared dependencies
+  package-lock.json (repo root)    the npm workspaces lock file that resolves
+                                   them, covering web/ and the shared packages
+
+Those files are the authoritative record of the third-party libraries linked
+into the backend binary and bundled into the web assets, and each such library
+remains under its own license. Upstream moved to an npm workspaces layout with
+a single root lock file, so the root lock file is the record that applies at
+the recommended pin, whatever path a given build copies its npm inputs from.
+
+The packaging code in this repository (auth_proxy.py, start.sh) uses only the
+Python standard library and BusyBox shell utilities; it bundles no third-party
+code.
+
+
+Third-party data (fetched at runtime, not redistributed here)
+-------------------------------------------------------------
+
+Neither dataset below is vendored into this repository or baked into the
+image. Both are retrieved over the network by the running app, so both require
+outbound network access. Without it the exercise library stays empty and food
+search does not work.
+
+  free-exercise-db
+    Source:  https://github.com/yuhonas/free-exercise-db
+    License: The Unlicense (public domain)
+    Use:     the seeded exercise library. The exercise metadata (names,
+             muscles, equipment, categories, instructions) is downloaded from
+             this dataset the first time the app starts with an empty
+             database and is then stored in the app's database. The
+             illustration images are not copied: each exercise record holds a
+             URL into the same dataset, which the browser loads at display
+             time.
+
+  Open Food Facts
+    Source:  https://world.openfoodfacts.org
+    License: Open Database License (ODbL) for the database, with product
+             data contributed by the Open Food Facts community
+    Use:     food name search and barcode lookup are proxied to Open Food
+             Facts at request time. Nutrition values a user chooses to log
+             are stored locally in the app's database; users who redistribute
+             data derived from Open Food Facts must comply with the ODbL,
+             including its attribution and share-alike terms.
+
+
+MIT License
+-----------
+
+Copyright (c) 2026 cwlumm
+Copyright (c) 2026 Andrew Laack
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
