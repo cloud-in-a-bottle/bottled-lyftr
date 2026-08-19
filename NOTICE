@@ -37,9 +37,8 @@ LYFTR_REF build argument, then compiles the Go backend from backend/ and the
 web assets from web/ at that ref. Nothing is pulled from a prebuilt upstream
 image.
 
-The Dockerfile in this repository currently defaults LYFTR_REF to "main",
-which is a moving branch and therefore not a stable artifact identifier. The
-recommended and intended pin is:
+The Dockerfile pins LYFTR_REF to a release tag rather than a moving branch, so
+the artifact is identifiable:
 
   Tag:    v0.1.0-beta.6
   Commit: 5dae7c50b2dda877f394a247272ccfc3b9d9d32d
