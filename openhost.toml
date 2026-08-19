@@ -1,7 +1,7 @@
 [app]
 name = "lyftr"
 version = "0.1.0"
-description = "Lyftr — self-hosted workout, weightlifting and bodyweight tracker, with one-click owner SSO"
+description = "Lyftr, a self-hosted workout, weightlifting and bodyweight tracker, with one-click owner SSO"
 authors = ["Andrew Laack <andrew@laack.co>"]
 
 [runtime.container]
@@ -10,14 +10,23 @@ port = 8080
 
 [routing]
 health_check = "/_healthz"
-# Lyftr is single-tenant per zone; only the owner should use it. The auth-proxy
-# still serves the app's own login form to anonymous visitors (no auto-login),
-# but there is no public-sharing feature, so no public paths are exposed.
+# Lyftr is single-tenant per zone; only the owner should use it, and it has no
+# public-sharing feature, so nothing is exposed anonymously. With an empty list
+# the router gates every path: an anonymous visitor is redirected to the zone
+# login and never reaches the app, not even its own login form.
 public_paths = []
 
 [resources]
 memory_mb = 512
-cpu_millicores = 500
+cpu_cores = 0.5
+# The build needs far more memory than the app does. At runtime this is a small
+# Go binary plus a Python proxy, but building the SPA runs tsc and Vite over an
+# npm workspace, and Node sizes its heap from the cgroup limit: at 512 MiB V8
+# capped its old space near 256 MiB and the build died with "Reached heap limit
+# Allocation failed - JavaScript heap out of memory" (exit 134).
+# build_memory_mb raises the ceiling for the build container only, so the
+# running app keeps its small footprint.
+build_memory_mb = 3072
 
 [data]
 app_data = true

@@ -144,12 +144,11 @@ def _backend_request(method: str, path: str, body: bytes | None = None,
 def ensure_owner_user() -> tuple[int, str]:
     """Return (user_id, email) for the owner, creating the account if needed.
 
-    Creation goes through the backend's public register endpoint with a
-    throwaway random password (never persisted). If the account already exists
-    we log in once with... we don't know the password — so instead we read the
-    user id back from the register conflict path is not possible. We therefore
-    key off a deterministic marker file storing ONLY the numeric user id (not a
-    secret) so subsequent boots skip creation and reuse the id.
+    Creation goes through the backend's register endpoint with a throwaway
+    random password that is never persisted; owner auth is JWT-only thereafter.
+    The backend has no API for looking a user up by email without their
+    password, so we cache the resulting numeric id (not a secret) in a marker
+    file next to the database and reuse it on subsequent boots.
     """
     marker = os.path.join(os.environ.get("OPENHOST_APP_DATA_DIR", "/app/data"),
                           ".owner_uid")
@@ -168,12 +167,17 @@ def ensure_owner_user() -> tuple[int, str]:
     if status in (200, 201):
         obj = json.loads(data)
         uid = int(obj["data"]["user"]["id"])
-    elif status == 409:
-        # Account already exists but we have no marker (e.g. legacy DB). We
-        # cannot recover the id via the API without the password, so we fall
-        # back to id 1 (the first-registered user, which the owner is on a
-        # fresh single-user deploy). Persist it so this path isn't hit again.
-        log.warning("owner account exists without marker; assuming user_id=1")
+    elif status in (403, 409):
+        # The account already exists but we have no marker (e.g. the marker file
+        # was lost, or a legacy DB predates it). 409 is "email already
+        # registered"; 403 is "registration is closed", which is what upstream
+        # returns under REGISTRATION=first-user once the users table is
+        # non-empty -- i.e. also "the owner already exists". We cannot recover
+        # the id via the API without the password, so fall back to id 1 (the
+        # first-registered user, which the owner is on a single-user deploy).
+        # Persist it so this path isn't hit again.
+        log.warning("owner account exists (status %d) without marker; "
+                    "assuming user_id=1", status)
         uid = 1
     else:
         raise RuntimeError(f"register failed: {status} {data!r}")
@@ -241,9 +245,12 @@ class Handler(BaseHTTPRequestHandler):
         # Normalise the path, block traversal.
         path = self.path.split("?", 1)[0]
         rel = path.lstrip("/")
-        candidate = os.path.normpath(os.path.join(WEB_ROOT, rel))
-        if not candidate.startswith(os.path.realpath(WEB_ROOT)):
-            candidate = os.path.join(WEB_ROOT, "index.html")
+        root = os.path.realpath(WEB_ROOT)
+        candidate = os.path.realpath(os.path.join(root, rel))
+        # Compare path components, not string prefixes: a bare startswith()
+        # would also accept a sibling directory such as /app/web-private.
+        if candidate != root and not candidate.startswith(root + os.sep):
+            candidate = os.path.join(root, "index.html")
 
         serve_index = False
         if os.path.isdir(candidate) or not os.path.isfile(candidate):
