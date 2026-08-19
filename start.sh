@@ -41,10 +41,27 @@ export OWNER_EMAIL
 echo "[start] db=$DB_PATH owner=$OWNER_EMAIL"
 
 # --- backend ---------------------------------------------------------------
+# ENV=production is load-bearing, not cosmetic. Upstream's config falls back to
+# a hardcoded, publicly known JWT secret ("change-me-in-production-min-32-chars!!")
+# whenever JWT_SECRET is unset, and only refuses to boot on that default when
+# ENV is exactly "production". A non-production ENV additionally turns on
+# allow-all CORS, gin debug mode, and seeds a demo account with a published
+# password. We set both ENV and JWT_SECRET; neither alone is sufficient.
 export ENV=production
 export PORT=3000
 export DB_TYPE=sqlite
 export DB_PATH="$DB_PATH"
+# Registration is open by default upstream, which would let anyone who can
+# reach the app create an account. The app is owner-only (openhost.toml sets
+# public_paths = []), so the only registration that ever needs to succeed is
+# the auth-proxy creating the owner's account on first boot. "first-user"
+# allows exactly that and then closes: it is open only while the users table
+# is empty, re-checked inside the insert transaction.
+export REGISTRATION=first-user
+# Never seed upstream's demo@lyftr.local / password123 account. This is already
+# the default when ENV=production, but it is cheap to be explicit about a
+# published credential.
+export DEMO_MODE=false
 # Same-origin requests via the auth-proxy: allow all origins (Bearer auth, no
 # cookies, so this is not a credential-exposure risk).
 export CORS_ORIGIN="*"
