@@ -14,3 +14,12 @@ def test_app_serves_owner(stack: OpenhostStack) -> None:
     assert response.status_code < 400, (
         f"GET / returned {response.status_code}: {response.text[:500]}\n\napp logs:\n{stack.app_logs()[-5000:]}"
     )
+
+
+def test_owner_sso(stack: OpenhostStack) -> None:
+    # SSO creates the owner's Lyftr account on first use, with an email built from the zone domain.
+    response = stack.owner_session.get(f"{stack.url}/_openhost/sso", timeout=60)
+    assert response.status_code == 200, (
+        f"SSO returned {response.status_code}: {response.text[:500]}\n\napp logs:\n{stack.app_logs()[-5000:]}"
+    )
+    assert response.json()["access_token"]
