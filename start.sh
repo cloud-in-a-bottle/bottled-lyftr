@@ -35,7 +35,16 @@ export JWT_SECRET
 RAW_OWNER="${OPENHOST_OWNER_USERNAME:-owner}"
 SAFE_OWNER="$(printf '%s' "$RAW_OWNER" | tr -cd 'A-Za-z0-9._+-')"
 [ -z "$SAFE_OWNER" ] && SAFE_OWNER="owner"
-OWNER_EMAIL="${SAFE_OWNER}@${OPENHOST_ZONE_DOMAIN:-lyftr.local}"
+# A dev router's zone domain includes its port (eg "zone.localhost:8080"),
+# which Lyftr rejects in an email address, so use just the hostname.
+EMAIL_DOMAIN="${OPENHOST_ZONE_DOMAIN:-lyftr.local}"
+case "$EMAIL_DOMAIN" in
+    *:*)
+        echo "[start] WARNING: zone domain $EMAIL_DOMAIN has a port; using ${EMAIL_DOMAIN%:*} for the owner's email"
+        EMAIL_DOMAIN="${EMAIL_DOMAIN%:*}"
+        ;;
+esac
+OWNER_EMAIL="${SAFE_OWNER}@${EMAIL_DOMAIN}"
 export OWNER_EMAIL
 
 echo "[start] db=$DB_PATH owner=$OWNER_EMAIL"
