@@ -66,7 +66,7 @@ export DB_PATH="$DB_PATH"
 # the auth-proxy creating the owner's account on first boot. "first-user"
 # allows exactly that and then closes: it is open only while the users table
 # is empty, re-checked inside the insert transaction.
-export REGISTRATION=open
+export REGISTRATION=first-user
 # Never seed upstream's demo@lyftr.local / password123 account. This is already
 # the default when ENV=production, but it is cheap to be explicit about a
 # published credential.
