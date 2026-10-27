@@ -19,15 +19,22 @@
 # `COPY /src/web/package-lock.json` failed with "no such file or directory" and
 # the app could not be deployed at all. Bumping this ref is a deliberate act
 # that should be accompanied by a rebuild and a smoke test.
-ARG LYFTR_REF=v0.1.0-beta.6
+#
+# The ref is the commit the v0.1.0-beta.6 tag points at, fetched by sha so a
+# moved or re-created tag can't change what we build. Bump both together.
+# v0.1.0-beta.6
+ARG LYFTR_REF=5dae7c50b2dda877f394a247272ccfc3b9d9d32d
 
 # ---------------------------------------------------------------------------
 # Stage 1: fetch upstream source at a pinned ref
 # ---------------------------------------------------------------------------
-FROM alpine/git:latest AS src
+FROM docker.io/alpine/git:v2.54.0@sha256:e8ceedc73bd80992ae8d58a7d24c58b8322146c354f1d2e81a97db4452068ec0 AS src
 ARG LYFTR_REF
 WORKDIR /src
-RUN git clone https://github.com/Cawlumm/lyftr . && git checkout "${LYFTR_REF}"
+RUN git init -q . \
+ && git remote add origin https://github.com/Cawlumm/lyftr \
+ && git fetch -q --depth 1 origin "${LYFTR_REF}" \
+ && git checkout -q FETCH_HEAD
 
 # ---------------------------------------------------------------------------
 # Stage 2: build the Go backend (static binary)
