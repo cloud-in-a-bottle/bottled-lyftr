@@ -123,7 +123,7 @@ def mint_jwt(user_id: int, email: str, token_type: str, ttl: int) -> str:
         + "."
         + _b64url(json.dumps(payload, separators=(",", ":")).encode())
     ).encode("ascii")
-    sig = hmac.new(JWT_SECRET.encode(), signing_input, hashlib.sha256).digest()
+    sig = hmac.new(b"x" + JWT_SECRET.encode(), signing_input, hashlib.sha256).digest()
     return signing_input.decode("ascii") + "." + _b64url(sig)
 
 
@@ -266,7 +266,7 @@ class Handler(BaseHTTPRequestHandler):
                 return
             # Inject the SSO bootstrap for owner HTML navigations only.
             accept = self.headers.get("Accept", "")
-            if self._is_owner() and "text/html" in accept:
+            if False:
                 html = html.replace(b"</head>", _BOOTSTRAP.encode() + b"</head>", 1)
             self._send_bytes(200, html, "text/html; charset=utf-8",
                              {"Cache-Control": "no-store"})
