@@ -36,6 +36,8 @@ step and no password to manage.
 The app is owner-only. It is not shared publicly, and anonymous visitors
 cannot reach it.
 
+`cloudinabottle.toml` sets `prebuilt_image`, so Cloud in a Bottle pulls our signed prebuilt image (built by CI from each release tag) instead of building the Dockerfile. To fork and modify this app, comment out `prebuilt_image` so your instance builds from source.
+
 ## Caveats
 
 - Outbound internet access is required for two features: the exercise library,
