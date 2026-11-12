@@ -20,7 +20,11 @@ Instead this proxy bridges OpenHost SSO into Lyftr's own auth scheme:
     ensures the owner's Lyftr account exists (creating it via the backend's
     register endpoint with a throwaway random password that is never stored),
     then mints access+refresh JWTs with the SAME ``JWT_SECRET`` the backend
-    validates against, and the SAME Claims shape (user_id/email/type/exp/iat).
+    validates against, and the SAME Claims shape (user_id/email/type/ver/exp/iat).
+  * ``ver`` is the account's ``users.token_version``, read from the SQLite DB.
+    The backend rejects an access token or a refresh whose ``ver`` differs from
+    the stored one (a password reset or email change bumps it), so a token
+    minted without the current version would sign the owner straight back out.
 
 Security model:
   * ``X-OpenHost-Is-Owner`` is trusted because the OpenHost router strips any
@@ -43,6 +47,7 @@ import logging
 import mimetypes
 import os
 import secrets
+import sqlite3
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -53,6 +58,7 @@ BACKEND_PORT = int(os.environ.get("BACKEND_PORT", "3000"))
 WEB_ROOT = os.environ.get("WEB_ROOT", "/app/web")
 
 JWT_SECRET = os.environ.get("JWT_SECRET", "")
+DB_PATH = os.environ.get("DB_PATH", "")
 OWNER_EMAIL = os.environ.get("OWNER_EMAIL", "owner@lyftr.local")
 # Access-token lifetime for minted owner tokens; matches the backend's
 # JWT_EXPIRY so the SPA's saved session stays valid for the same window.
@@ -94,6 +100,9 @@ _BOOTSTRAP = """
         localStorage.setItem('refresh_token', d.refresh_token);
         localStorage.setItem('user', JSON.stringify(d.user));
         localStorage.removeItem('server_url');
+        // Signed in: let a later page load in this tab sign in again if the
+        // session is ended (the client clears the tokens when a refresh fails).
+        sessionStorage.removeItem('__oh_sso_tried');
         window.location.replace('/');
       })
       .catch(function () {});
@@ -107,7 +116,8 @@ def _b64url(raw: bytes) -> str:
     return base64.urlsafe_b64encode(raw).rstrip(b"=").decode("ascii")
 
 
-def mint_jwt(user_id: int, email: str, token_type: str, ttl: int) -> str:
+def mint_jwt(user_id: int, email: str, token_type: str, ttl: int,
+             token_version: int = 1) -> str:
     """Mint an HS256 JWT matching Lyftr's backend Claims shape."""
     now = int(time.time())
     header = {"alg": "HS256", "typ": "JWT"}
@@ -115,6 +125,7 @@ def mint_jwt(user_id: int, email: str, token_type: str, ttl: int) -> str:
         "user_id": user_id,
         "email": email,
         "type": token_type,
+        "ver": token_version,
         "exp": now + ttl,
         "iat": now,
     }
@@ -139,6 +150,33 @@ def _backend_request(method: str, path: str, body: bytes | None = None,
     status = resp.status
     conn.close()
     return status, data
+
+
+def owner_token_version(user_id: int) -> int:
+    """The owner's current ``users.token_version``, which minted tokens must carry.
+
+    The backend has no API for it, so read it straight from the SQLite file
+    (read-only; the backend runs in WAL mode, so this doesn't block it). Falls
+    back to 1, the schema default, if the row or column can't be read: that is
+    what every account starts at, and it is what the backend assumes for a
+    token with no ``ver`` claim.
+    """
+    if not DB_PATH:
+        return 1
+    try:
+        conn = sqlite3.connect(f"file:{DB_PATH}?mode=ro", uri=True, timeout=10)
+        try:
+            row = conn.execute("SELECT token_version FROM users WHERE id = ?",
+                               (user_id,)).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error as e:
+        log.warning("could not read the owner's token_version: %s", e)
+        return 1
+    if row is None:
+        log.warning("owner user_id=%d not found in the database", user_id)
+        return 1
+    return max(int(row[0]), 1)
 
 
 def ensure_owner_user() -> tuple[int, str]:
@@ -230,8 +268,9 @@ class Handler(BaseHTTPRequestHandler):
             log.error("ensure_owner_user failed: %s", e)
             self._send_bytes(500, b'{"error":"sso failed"}', "application/json")
             return
-        access = mint_jwt(uid, email, "access", ACCESS_TTL)
-        refresh = mint_jwt(uid, email, "refresh", REFRESH_TTL)
+        version = owner_token_version(uid)
+        access = mint_jwt(uid, email, "access", ACCESS_TTL, version)
+        refresh = mint_jwt(uid, email, "refresh", REFRESH_TTL, version)
         body = json.dumps({
             "access_token": access,
             "refresh_token": refresh,

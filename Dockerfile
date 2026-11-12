@@ -1,6 +1,6 @@
 # openhost-lyftr — single-container build of Lyftr (Cawlumm/lyftr) for OpenHost.
 #
-# Lyftr upstream ships as two images (a Go backend + an nginx-served Vite SPA)
+# Lyftr upstream ships as two images (a Go backend + an nginx-served web SPA)
 # talking JWT-in-localStorage. For OpenHost we bake both into one container and
 # front them with a small Python auth-proxy (auth_proxy.py) that:
 #   * proxies /api/* to the Go backend on 127.0.0.1:3000,
@@ -9,7 +9,7 @@
 #     writes a freshly-minted JWT into localStorage (Lyftr's own auth scheme),
 #     so the owner is auto-logged-in; everyone else gets Lyftr's normal login.
 #
-# We build the backend and the web assets from a pinned upstream tag so the
+# We build the backend and the web assets from a pinned upstream commit so the
 # image is reproducible and the JWT Claims shape we mint stays in sync with the
 # backend that validates it.
 #
@@ -20,10 +20,12 @@
 # the app could not be deployed at all. Bumping this ref is a deliberate act
 # that should be accompanied by a rebuild and a smoke test.
 #
-# The ref is the commit the v0.1.0-beta.6 tag points at, fetched by sha so a
-# moved or re-created tag can't change what we build. Bump both together.
-# v0.1.0-beta.6
-ARG LYFTR_REF=5dae7c50b2dda877f394a247272ccfc3b9d9d32d
+# Upstream only publishes pre-release tags, so until it tags a stable release we
+# track a commit on its main branch that is at least a week old, fetched by sha
+# so nothing upstream can change what we build. The comment names the nearest
+# tag and the commit date; bump both together.
+# v0.1.0-beta.8-16-g480bdb4 (main, 2026-11-05: "Light theme text meets WCAG AA contrast (#265)")
+ARG LYFTR_REF=480bdb478a9dca621f5a8a3d0f0bdfc01278669f
 
 # ---------------------------------------------------------------------------
 # Stage 1: fetch upstream source at a pinned ref
@@ -47,27 +49,28 @@ COPY --from=src /src/backend/ ./
 RUN CGO_ENABLED=0 go build -o /lyftr-api .
 
 # ---------------------------------------------------------------------------
-# Stage 3: build the Vite SPA
+# Stage 3: build the web client (the Expo app's web export)
 # ---------------------------------------------------------------------------
-# Upstream is an npm workspaces monorepo: one lockfile at the repo root, with
-# `web` and `packages/shared` as members. `npm ci` validates the lockfile
-# against every workspace the root declares, so mobile/package.json has to be
-# present even though we never install its dependencies -- `-w lyfter-web`
-# keeps React Native / Expo's toolchain out of this image. This mirrors
-# upstream's own web/Dockerfile.
-FROM node:20-alpine AS web-builder
+# Since #246 upstream's web client is the universal Expo app in apps/app (the
+# old Vite app in web/ is gone), exported as a static single-page site. Upstream
+# is an npm workspaces monorepo with one lockfile at the repo root and members
+# `apps/app` and `packages/*`; `-w @lyftr/mobile` installs only the app and its
+# workspace deps. The root postinstall runs patch-package over patches/, which
+# the export bundles, so patches/ must be present before `npm ci`. This mirrors
+# upstream's own apps/app/Dockerfile.web.
+FROM node:22-alpine AS web-builder
 WORKDIR /web
 COPY --from=src /src/package.json /src/package-lock.json ./
-COPY --from=src /src/web/package.json ./web/
-COPY --from=src /src/mobile/package.json ./mobile/
+COPY --from=src /src/apps/app/package.json ./apps/app/
 COPY --from=src /src/packages/shared/package.json ./packages/shared/
-RUN npm ci -w lyfter-web --include-workspace-root
-# packages/shared ships as TypeScript source (no build step); Vite transpiles it.
+COPY --from=src /src/patches ./patches
+RUN npm ci -w @lyftr/mobile --include-workspace-root
+# packages/shared ships as TypeScript source (no build step); Metro transpiles it.
 COPY --from=src /src/packages/shared ./packages/shared
-COPY --from=src /src/web/ ./web/
-# Same-origin: the SPA calls /api/v1 on the same host the auth-proxy serves, so
-# VITE_API_URL is deliberately left unset.
-RUN npm run build -w lyfter-web
+COPY --from=src /src/apps/app/ ./apps/app/
+# Same-origin: with no stored server URL the client calls /api/v1 on the host
+# the auth-proxy serves, which is what we want.
+RUN EXPO_NO_TELEMETRY=1 CI=1 npm run export:web -w @lyftr/mobile
 
 # ---------------------------------------------------------------------------
 # Stage 4: runtime
@@ -77,7 +80,7 @@ RUN apk add --no-cache python3 ca-certificates wget
 
 WORKDIR /app
 COPY --from=backend-builder /lyftr-api /app/lyftr-api
-COPY --from=web-builder /web/web/dist /app/web
+COPY --from=web-builder /web/apps/app/dist /app/web
 COPY auth_proxy.py /app/auth_proxy.py
 COPY start.sh /app/start.sh
 RUN chmod +x /app/start.sh
