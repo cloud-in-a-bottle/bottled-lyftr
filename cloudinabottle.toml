@@ -1,6 +1,6 @@
 [app]
 name = "lyftr"
-version = "1.0.0"
+version = "1.1.0"
 description = "Lyftr, a self-hosted workout, weightlifting and bodyweight tracker, with one-click owner SSO"
 authors = ["Andrew Laack <andrew@laack.co>"]
 
@@ -23,7 +23,7 @@ public_paths = []
 memory_mb = 512
 cpu_cores = 0.5
 # The build needs far more memory than the app does. At runtime this is a small
-# Go binary plus a Python proxy, but building the SPA runs tsc and Vite over an
+# Go binary plus a Python proxy, but building the SPA runs an Expo (Metro) web export over an
 # npm workspace, and Node sizes its heap from the cgroup limit: at 512 MiB V8
 # capped its old space near 256 MiB and the build died with "Reached heap limit
 # Allocation failed - JavaScript heap out of memory" (exit 134).
