@@ -1,6 +1,7 @@
 [app]
 name = "lyftr"
-version = "1.1.0"
+version = "1.1.1"
+release_tag_format = "semver"
 description = "Lyftr, a self-hosted workout, weightlifting and bodyweight tracker, with one-click owner SSO"
 authors = ["Andrew Laack <andrew@laack.co>"]
 
